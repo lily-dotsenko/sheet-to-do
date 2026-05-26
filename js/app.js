@@ -1,343 +1,289 @@
 import { TaskList } from './task-list.js';
+import { Modal }    from './modal.js';
+import { BgPicker } from './bg-picker.js';
+import { Renderer } from './renderer.js';
 
 export class App {
   constructor({ storage, icons, backgrounds }) {
-    this.lists = [];
+    this.lists   = [];
     this.storage = storage;
-    this.icons = Array.isArray(icons) && icons.length > 0
-      ? icons
-      : [{ icon: 'bi-list-task', label: 'General' }];
 
-    // --- DOM ---
-    this.listsContainer = document.getElementById("listsContainer");
-    this.createListBtn = document.getElementById("createListBtn");
-
-    // --- modal ---
-    this.modalOverlay = document.getElementById("modalOverlay");
-    this.modalTitle = document.getElementById("modalTitle");
-    this.modalInput = document.getElementById("modalInput");
-    this.modalConfirmBtn = document.getElementById("modalConfirmBtn");
-    this.modalCancelBtn = document.getElementById("modalCancelBtn");
-
-    this._modalCallback = null;
-
-    this.modalIconsGrid  = document.getElementById('modalIconsGrid');
-    this._buildIconPicker();
-
-    // --- background ---
-    this._backgrounds = Array.isArray(backgrounds) ? backgrounds : [];
-    this.bgPickerBtn  = document.getElementById('bgPickerBtn');
-    this.bgPicker     = document.getElementById('bgPicker');
-    this._buildBgPicker();
-
-    if (this._backgrounds.length === 0) {
-      this.bgPickerBtn?.setAttribute('hidden', 'hidden');
-    }
-  }
-
-  _buildIconPicker() {
-    if (!this.modalIconsGrid) return;
-
-    this.icons.forEach(({ icon, label }) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'icon-option';
-      btn.title = label;
-      btn.dataset.icon = icon;
-      btn.innerHTML = `<i class="bi ${icon}"></i><span>${label}</span>`;
-      btn.addEventListener('click', () => this._selectIcon(icon));
-      this.modalIconsGrid.appendChild(btn);
-    });
-    this._selectIcon(this.icons[0].icon);
-  }
-
-  _selectIcon(icon) {
-    this._selectedIcon = icon;
-    this.modalIconsGrid.querySelectorAll('.icon-option').forEach((btn) => {
-      btn.classList.toggle('icon-option--active', btn.dataset.icon === icon);
-    });
-  }
-
-  _buildBgPicker() {
-    if (!this.bgPicker || this._backgrounds.length === 0) return;
-
-    this._backgrounds.forEach((bg) => {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'bg-picker__item';
-      item.title = bg.label;
-      item.dataset.bgId = bg.id;
-      item.style.backgroundImage = `url("pictures/${bg.file}")`;
-      item.addEventListener('click', () => {
-        this._applyBackground(bg.id);
-        this.bgPicker.classList.remove('is-open');
-      });
-      this.bgPicker.appendChild(item);
-    });
-  }
-
-  _applyBackground(bgId) {
-    const bg = this._backgrounds.find((b) => b.id === bgId) ?? this._backgrounds[0];
-    document.body.style.backgroundImage = `url("pictures/${bg.file}")`;
-    this.bgPicker.querySelectorAll('.bg-picker__item').forEach((item) => {
-      item.classList.toggle('is-active', item.dataset.bgId === bg.id);
+    this._modal = new Modal({
+      icons,
+      overlayEl:   document.getElementById('modalOverlay'),
+      titleEl:     document.getElementById('modalTitle'),
+      inputEl:     document.getElementById('modalInput'),
+      confirmBtn:  document.getElementById('modalConfirmBtn'),
+      cancelBtn:   document.getElementById('modalCancelBtn'),
+      iconsGridEl: document.getElementById('modalIconsGrid'),
     });
 
-    this.storage.saveBg(bg.id);
+    this._bgPicker = new BgPicker({
+      backgrounds,
+      storage,
+      pickerEl:    document.getElementById('bgPicker'),
+      pickerBtnEl: document.getElementById('bgPickerBtn'),
+    });
+
+    this._renderer = new Renderer({
+      container:    document.getElementById('listsContainer'),
+      onAddTask:    (listId, text) => this._handleAddTask(listId, text),
+      onToggleTask: (listId, taskId) => this._handleToggleTask(listId, taskId),
+      onDeleteTask: (listId, taskId) => this._handleDeleteTask(listId, taskId),
+      onDeleteList: (listId) => this._handleDeleteList(listId),
+      onAddPhoto:   (listId, taskId, file) => this._handleAddPhoto(listId, taskId, file),
+      onRemovePhoto:(listId, taskId) => this._handleRemovePhoto(listId, taskId),
+      onShareList:  (listId) => this._handleShareList(listId),
+    });
+
+    this._createListBtn = document.getElementById('createListBtn');
+    this._toast = this._createToast();
   }
 
-  _loadSavedBackground() {
-    if (this._backgrounds.length === 0) return;
-
-    const savedId = this.storage.loadBg(this._backgrounds[0].id);
-    this._applyBackground(savedId);
-  }
+  // ─── Lifecycle ────────────────────────────────────────────────────────────
 
   init() {
-    this._loadSavedBackground();
+    this._bgPicker.loadSaved();
     this.lists = this.storage.load();
-    this.render();
-    this.bindGlobalEvents();
+    this._checkSharedList();
+    this._renderer.render(this.lists);
+    this._bindEvents();
   }
 
-  render() {
-    if (this.lists.length === 0) {
-      this.listsContainer.innerHTML =
-        '<p class="empty-state">No sheets yet. Create your first one! 📋</p>';
-      return;
-    }
+  // ─── Events ───────────────────────────────────────────────────────────────
 
-    this.listsContainer.innerHTML = "";
-    this.lists.forEach((list) => {
-      const card = this.createListCard(list);
-      this.listsContainer.appendChild(card);
-    });
-  }
-
-  createListCard(list) {
-    const card = document.createElement("div");
-    card.className = "task-list-card";
-    card.dataset.listId = list.id;
-
-    const header = document.createElement("div");
-    header.className = "task-list-card__header";
-
-    const title = document.createElement("h2");
-    title.className = "task-list-card__title";
-    const iconEl = document.createElement("i");
-    iconEl.className = `bi ${list.icon} task-list-card__icon`;
-    title.appendChild(iconEl);
-    title.appendChild(document.createTextNode(list.name));
-
-    const deleteListBtn = document.createElement("button");
-    deleteListBtn.type = "button";
-    deleteListBtn.className = "btn btn--icon";
-    deleteListBtn.title = "Delete list";
-    deleteListBtn.innerHTML = '<i class="bi bi-trash"></i>';
-    deleteListBtn.addEventListener("click", () => {
-      this.handleDeleteList(list.id);
-    });
-
-    header.appendChild(title);
-    header.appendChild(deleteListBtn);
-
-    const meta = document.createElement("p");
-    meta.className = "task-list-card__meta";
-    meta.textContent = this.buildMetaText(list);
-
-    const taskItems = document.createElement("ul");
-    taskItems.className = "task-items";
-
-    list.tasks.forEach((task) => {
-      const item = this.createTaskItem(list.id, task);
-      taskItems.appendChild(item);
-    });
-
-    const form = this.createAddTaskForm(list.id);
-
-    card.appendChild(header);
-    card.appendChild(meta);
-    card.appendChild(taskItems);
-    card.appendChild(form);
-
-    return card;
-  }
-
-  buildMetaText(list) {
-    const total = list.tasks.length;
-    if (total === 0) return "No tasks";
-    return `Done: ${list.doneCount} / ${total}`;
-  }
-
-  createTaskItem(listId, task) {
-    const item = document.createElement("li");
-    item.className = `task-item${task.done ? " task-item--done" : ""}`;
-    item.dataset.taskId = task.id;
-
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.className = "task-item__checkbox";
-    checkbox.checked = task.done;
-    checkbox.addEventListener("change", () => {
-      this.handleToggleTask(listId, task.id);
-    });
-
-    const text = document.createElement("span");
-    text.className = "task-item__text";
-    text.textContent = task.text;
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "btn btn--danger";
-    deleteBtn.title = "Delete task";
-    deleteBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
-    deleteBtn.addEventListener("click", () => {
-      this.handleDeleteTask(listId, task.id);
-    });
-
-    item.appendChild(checkbox);
-    item.appendChild(text);
-    item.appendChild(deleteBtn);
-
-    return item;
-  }
-
-  createAddTaskForm(listId) {
-    const form = document.createElement("form");
-    form.className = "add-task-form";
-
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "add-task-form__input";
-    input.placeholder = "New task...";
-    input.maxLength = 120;
-
-    const submitBtn = document.createElement("button");
-    submitBtn.type = "submit";
-    submitBtn.className = "btn btn--primary";
-    submitBtn.textContent = "+";
-    submitBtn.title = "Add task";
-
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const text = input.value.trim();
-      if (!text) return;
-      this.handleAddTask(listId, text);
-      const card = this.listsContainer.querySelector(`[data-list-id="${listId}"]`);
-      card?.querySelector(".add-task-form__input")?.focus();
-    });
-
-    form.appendChild(input);
-    form.appendChild(submitBtn);
-
-    return form;
-  }
-
-  bindGlobalEvents() {
-    // --- new list ---
-    this.createListBtn.addEventListener("click", () => {
-      this.openModal("New sheet", "Sheet name...", (name, icon) => {
-        this.handleCreateList(name, icon);
+  _bindEvents() {
+    this._createListBtn.addEventListener('click', () => {
+      this._modal.open('New sheet', 'Sheet name...', (name, icon) => {
+        this._handleCreateList(name, icon);
       });
     });
-
-    // --- modal ---
-    this.modalOverlay.addEventListener("click", (event) => {
-      if (event.target === this.modalOverlay) this.closeModal();
-    });
-
-    this.modalConfirmBtn.addEventListener("click", () => this.confirmModal());
-    this.modalCancelBtn.addEventListener("click", () => this.closeModal());
-
-    this.modalInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") this.confirmModal();
-      if (event.key === "Escape") this.closeModal();
-    });
-
-    // --- background picker ---
-    if (this.bgPickerBtn && this.bgPicker && this._backgrounds.length > 0) {
-      this.bgPickerBtn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        this.bgPicker.classList.toggle('is-open');
-      });
-
-      document.addEventListener('click', (event) => {
-        if (!this.bgPicker.contains(event.target) && event.target !== this.bgPickerBtn) {
-          this.bgPicker.classList.remove('is-open');
-        }
-      });
-    }
   }
 
-  handleCreateList(name, icon) {
+  // ─── Handlers ─────────────────────────────────────────────────────────────
+
+  _handleCreateList(name, icon) {
     const list = new TaskList(name, [], undefined, icon);
     this.lists.push(list);
-    this.saveAndRender();
+    this._saveAndRender();
   }
 
-  handleDeleteList(listId) {
-    const list = this.findList(listId);
+  _handleDeleteList(listId) {
+    const list = this._findList(listId);
     if (!list) return;
     if (!confirm(`Delete "${list.name}" and all its tasks?`)) return;
     this.lists = this.lists.filter((l) => l.id !== listId);
-    this.saveAndRender();
+    this._saveAndRender();
   }
 
-  handleAddTask(listId, text) {
-    const list = this.findList(listId);
+  _handleAddTask(listId, text) {
+    const list = this._findList(listId);
     if (!list) return;
     list.addTask(text);
-    this.saveAndRender();
+    this._saveAndRender();
   }
 
-  handleToggleTask(listId, taskId) {
-    const list = this.findList(listId);
+  _handleToggleTask(listId, taskId) {
+    const list = this._findList(listId);
     if (!list) return;
     const task = list.findTask(taskId);
     if (!task) return;
     task.toggleDone();
-    this.saveAndRender();
+    this._saveAndRender();
   }
 
-  handleDeleteTask(listId, taskId) {
-    const list = this.findList(listId);
+  _handleDeleteTask(listId, taskId) {
+    const list = this._findList(listId);
     if (!list) return;
     list.removeTask(taskId);
-    this.saveAndRender();
+    this._saveAndRender();
   }
 
-  openModal(title, placeholder, callback) {
-    this.modalTitle.textContent = title;
-    this.modalInput.placeholder = placeholder;
-    this.modalInput.value = "";
-    this._modalCallback = callback;
-    this._selectIcon(this.icons[0].icon);
-    this.modalOverlay.classList.add("modal-overlay--visible");
-    setTimeout(() => this.modalInput.focus(), 50);
+  async _handleAddPhoto(listId, taskId, file) {
+    const list = this._findList(listId);
+    if (!list) return;
+    const task = list.findTask(taskId);
+    if (!task) return;
+    task.photo = await this._compressImage(file);
+    this._saveAndRender();
   }
 
-  closeModal() {
-    this.modalOverlay.classList.remove("modal-overlay--visible");
-    this._modalCallback = null;
+  _handleRemovePhoto(listId, taskId) {
+    const list = this._findList(listId);
+    if (!list) return;
+    const task = list.findTask(taskId);
+    if (!task) return;
+    task.photo = null;
+    this._saveAndRender();
   }
 
-  confirmModal() {
-    const value = this.modalInput.value.trim();
-    if (!value) {
-      alert("Just name your sheet finally!");
-      this.modalInput.focus();
-      return;
+  async _handleShareList(listId) {
+    const list = this._findList(listId);
+    if (!list) return;
+
+    // Recompress each photo to 100 px / q=0.2 (~1–3 KB each as base64)
+    const tasksWithPhotos = await Promise.all(
+      list.tasks.map(async (t) => ({
+        id:    t.id,
+        text:  t.text,
+        done:  t.done,
+        photo: t.photo ? await this._compressForShare(t.photo) : null,
+      }))
+    );
+
+    const buildUrl = (tasks) => {
+      const data    = { id: list.id, name: list.name, icon: list.icon, tasks };
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+      return `${location.origin}${location.pathname}#share=${encoded}`;
+    };
+
+    // Hash fragment is never sent to the server — no server-side length limit.
+    // Most messengers handle URLs up to ~4 000 chars; strip photos if longer.
+    let shareUrl       = buildUrl(tasksWithPhotos);
+    let photosExcluded = false;
+
+    if (shareUrl.length > 4000) {
+      const tasksNoPhotos = list.tasks.map((t) => ({
+        id: t.id, text: t.text, done: t.done, photo: null,
+      }));
+      shareUrl       = buildUrl(tasksNoPhotos);
+      photosExcluded = true;
     }
-    if (this._modalCallback) this._modalCallback(value, this._selectedIcon);
-    this.closeModal();
+
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/plain': new Blob([shareUrl], { type: 'text/plain' }),
+          'text/html':  new Blob(
+            [`<a href="${shareUrl}">check up my list 📋</a>`],
+            { type: 'text/html' }
+          ),
+        }),
+      ]);
+    } catch {
+      // Fallback for browsers that don't support ClipboardItem
+      await navigator.clipboard.writeText(shareUrl);
+    }
+
+    this._showToast(photosExcluded ? 'Link copied! (no photos) 🔗' : 'Link copied! 🔗');
   }
 
-  findList(listId) {
-    return this.lists.find((list) => list.id === listId);
+  // ─── Share import ─────────────────────────────────────────────────────────
+
+  _checkSharedList() {
+    // Support both #share= (current) and ?share= (legacy) for old links
+    let encoded = null;
+    if (location.hash.startsWith('#share=')) {
+      encoded = location.hash.slice(7);
+    } else {
+      encoded = new URLSearchParams(location.search).get('share');
+    }
+    if (!encoded) return;
+
+    try {
+      const raw = JSON.parse(decodeURIComponent(escape(atob(encoded))));
+      if (!raw.name || !Array.isArray(raw.tasks)) return;
+
+      if (!confirm(`Import list "${raw.name}"?`)) return;
+
+      const imported = TaskList.fromJSON({ ...raw, id: TaskList.generateId() });
+      this.lists.push(imported);
+      this.storage.save(this.lists);
+    } catch {
+      // Malformed share data — silently ignore
+    } finally {
+      history.replaceState(null, '', location.pathname);
+    }
   }
 
-  saveAndRender() {
+  // ─── Image compression ────────────────────────────────────────────────────
+
+  // Recompress an already-stored base64 data-URL to 100 px / JPEG q=0.2
+  // for the share URL — keeps each photo to roughly 1–3 KB as base64.
+  _compressForShare(dataUrl) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 100;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          if (width > height) {
+            height = Math.round((height * MAX) / width);
+            width  = MAX;
+          } else {
+            width  = Math.round((width * MAX) / height);
+            height = MAX;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width  = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.2));
+      };
+      // On error exclude the photo rather than crash the share flow
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+  }
+
+  _compressImage(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 800;
+          let { width, height } = img;
+          if (width > MAX || height > MAX) {
+            if (width > height) {
+              height = Math.round((height * MAX) / width);
+              width = MAX;
+            } else {
+              width = Math.round((width * MAX) / height);
+              height = MAX;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width  = width;
+          canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.75));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // ─── Toast ────────────────────────────────────────────────────────────────
+
+  _createToast() {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    document.body.appendChild(el);
+    return el;
+  }
+
+  _showToast(message) {
+    this._toast.textContent = message;
+    this._toast.classList.add('toast--visible');
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => {
+      this._toast.classList.remove('toast--visible');
+    }, 2200);
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+
+  _findList(listId) {
+    return this.lists.find((l) => l.id === listId);
+  }
+
+  _saveAndRender() {
     this.storage.save(this.lists);
-    this.render();
+    this._renderer.render(this.lists);
   }
 }

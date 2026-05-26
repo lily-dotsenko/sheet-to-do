@@ -172,4 +172,174 @@
   font-size: var(--font-size-lg);
 }
 
+/* ─── Task list card header actions ────────────────────────────────────── */
+
+.task-list-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* ─── Task photo thumbnail ───────────────────────────────────────────────── */
+
+.task-item__file-input {
+  display: none;
+}
+
+.task-item__photo-area {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.task-item__camera-btn {
+  opacity: 0.35;
+  font-size: 1rem !important;
+  padding: 3px !important;
+  transition: opacity 0.15s ease;
+}
+
+.task-item:hover .task-item__camera-btn {
+  opacity: 0.75;
+}
+
+.task-item__camera-btn:hover {
+  opacity: 1 !important;
+}
+
+.task-item__photo-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.task-item__photo-thumb {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  display: block;
+}
+
+.task-item__photo-thumb:hover {
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+  transform: scale(1.04);
+}
+
+.task-item__photo-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: var(--color-accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 1;
+}
+
+.task-item__photo-wrap:hover .task-item__photo-remove {
+  opacity: 1;
+}
+
+/* ─── Photo lightbox ─────────────────────────────────────────────────────── */
+
+.photo-lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background-color: rgba(0, 0, 0, 0.88);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  animation: fadeIn 0.18s ease;
+}
+
+.photo-lightbox--visible {
+  display: flex;
+}
+
+.photo-lightbox__img {
+  max-width: 92vw;
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: var(--radius);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+  cursor: default;
+  animation: scaleIn 0.2s ease;
+}
+
+.photo-lightbox__close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.photo-lightbox__close:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.92); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+/* ─── Toast notification ─────────────────────────────────────────────────── */
+
+.toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background-color: var(--color-primary);
+  color: #fff;
+  padding: 10px 22px;
+  border-radius: 24px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1100;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  white-space: nowrap;
+}
+
+.toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
 

@@ -1,8 +1,9 @@
 export class Task {
-  constructor(text, done = false, id = Task.generateId()) {
+  constructor(text, done = false, id = Task.generateId(), photo = null) {
     this.id = id;
     this.text = text;
     this.done = done;
+    this.photo = photo;
   }
 
   static generateId() {
@@ -14,6 +15,7 @@ export class Task {
   }
 
   static fromJSON(raw) {
-    return new Task(raw.text ?? '', raw.done ?? false, raw.id);
+    const task = new Task(raw.text ?? '', raw.done ?? false, raw.id, raw.photo ?? null);
+    return task;
   }
 }
