@@ -15,7 +15,7 @@ export class Task {
   }
 
   static fromJSON(raw) {
-    const task = new Task(raw.text ?? '', raw.done ?? false, raw.id, raw.photo ?? null);
+    const task = new Task(raw.text ?? '', raw.done ?? false, raw.id ?? Task.generateId(), raw.photo ?? null);
     return task;
   }
 }

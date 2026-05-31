@@ -104,8 +104,12 @@ export class App {
     if (!list) return;
     const task = list.findTask(taskId);
     if (!task) return;
-    task.photo = await this._compressImage(file);
-    this._saveAndRender();
+    try {
+      task.photo = await this._compressImage(file);
+      this._saveAndRender();
+    } catch {
+      this._showToast('Failed to load image');
+    }
   }
 
   _handleRemovePhoto(listId, taskId) {
@@ -162,7 +166,12 @@ export class App {
       ]);
     } catch {
       // Fallback for browsers that don't support ClipboardItem
-      await navigator.clipboard.writeText(shareUrl);
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+      } catch {
+        this._showToast('Could not copy link');
+        return;
+      }
     }
 
     this._showToast(photosExcluded ? 'Link copied! (no photos) 🔗' : 'Link copied! 🔗');

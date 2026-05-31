@@ -31,6 +31,6 @@ export class TaskList {
 
   static fromJSON(raw) {
     const tasks = (raw.tasks ?? []).map(Task.fromJSON);
-    return new TaskList(raw.name ?? '', tasks, raw.id, raw.icon ?? 'bi-list-task');
+    return new TaskList(raw.name ?? '', tasks, raw.id ?? TaskList.generateId(), raw.icon ?? 'bi-list-task');
   }
 }
